@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Pipeline": {
+      "commandName": "Project",
+      "commandLineArgs": "\"C:\\Temp\\New folder\\somefile.iso\" \"C:\\Temp\\New folder\\somefile.zzz\" compress"
+    }
+  }
+}
