@@ -13,6 +13,7 @@ namespace PipelineTests
         [Theory]
         [InlineData(@"C:\Temp\New folder\JetBrains.ReSharperUltimate.2019.2.2.exe")]
         [InlineData(@"C:\Temp\VeeamBackup&Replication_9.5.4.2866.Update4b_.iso")]
+        [InlineData(@"C:\Temp\New folder\VirtualBox-6.0.14-133895-Win.txt")]
         public void TestPipeline(string inputFile)
         {
             var fileName = Path.GetFileNameWithoutExtension(inputFile);
