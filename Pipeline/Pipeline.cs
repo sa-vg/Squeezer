@@ -1,13 +1,17 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Threading;
 
 namespace Pipelines
 {
     public abstract class Pipeline
     {
+        private readonly BlockingCollection<Block> _outputBuffer = new BlockingCollection<Block>(200);
+
         public static Pipeline Create(CompressionMode mode)
         {
             if(mode == CompressionMode.Compress) return new CompressionPipeline();
@@ -43,19 +47,26 @@ namespace Pipelines
         public void RunPipeline(BinaryReader reader, BinaryWriter writer)
         {
             var transformBlock = TransformBlock();
-            var writeBlock = WriteBlock(writer);
 
-            var blocks = ReadBlocks(reader).
-                    AsParallel().
-                    AsOrdered().
-                    WithExecutionMode(ParallelExecutionMode.ForceParallelism).
-                    WithMergeOptions(ParallelMergeOptions.NotBuffered).
-                Select(transformBlock);
+            var writerThread = CreateWriterThread(WriteBlock(writer));
+            writerThread.Start();
 
-            foreach (var block in blocks)
+            ReadBlocks(reader).AsParallel().
+            Select(transformBlock).
+            ForAll(x => _outputBuffer.Add(x));
+
+            _outputBuffer.CompleteAdding();
+
+            writerThread.Join();
+        }
+
+        private Thread CreateWriterThread(Action<Block> writeBlock)
+        {
+            return new Thread(() =>
             {
-                writeBlock(block);
-            }
+                do if (_outputBuffer.TryTake(out Block block)) writeBlock(block);
+                while (!_outputBuffer.IsCompleted);
+            });
         }
 
         public abstract IEnumerable<Block> ReadBlocks(BinaryReader reader);
