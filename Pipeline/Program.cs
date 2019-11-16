@@ -6,7 +6,6 @@ namespace Pipelines
     public class Config
     {
         public const int BlockSize = 1024 * 1024;
-        public const int ReaderBufferSize = 200;
     }
 
     public class Program
