@@ -20,6 +20,11 @@ namespace Pipelines
 
                 var pipeline = Pipeline.Create(compressionMode);
                 pipeline.Process(inputFile, outputFile);
+
+                var restoredFile = inputFile.Replace(inputFile, inputFile + "_restored");
+
+                var pipeline2 = Pipeline.Create(CompressionMode.Decompress);
+                pipeline2.Process(outputFile, restoredFile);
             }
             catch (Exception ex)
             {
