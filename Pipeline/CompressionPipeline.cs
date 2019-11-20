@@ -8,7 +8,7 @@ namespace Pipelines
 {
     class CompressionPipeline : Pipeline
     {
-        public override IEnumerable<Block> ReadBlocks(BinaryReader reader)
+        protected override IEnumerable<Block> ReadBlocks(BinaryReader reader)
         {
             int index = 0;
             while (true)
@@ -19,7 +19,7 @@ namespace Pipelines
             }
         }
 
-        public override Action<Block> WriteBlock(BinaryWriter writer)
+        protected override Action<Block> WriteBlock(BinaryWriter writer)
         {
             return block =>
             {
@@ -29,7 +29,7 @@ namespace Pipelines
             };
         }
 
-        public override Func<Block, Block> TransformBlock()
+        protected override Func<Block, Block> TransformBlock()
         {
             var localBuffer = new ThreadLocal<MemoryStream>(() => new MemoryStream());
 

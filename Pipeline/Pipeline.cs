@@ -40,7 +40,7 @@ namespace Pipelines
             }
         }
 
-        public void RunPipeline(BinaryReader reader, BinaryWriter writer)
+        private void RunPipeline(BinaryReader reader, BinaryWriter writer)
         {
             var transformBlock = TransformBlock();
             var writeBlock = WriteBlock(writer);
@@ -58,10 +58,10 @@ namespace Pipelines
             }
         }
 
-        public abstract IEnumerable<Block> ReadBlocks(BinaryReader reader);
+        protected abstract IEnumerable<Block> ReadBlocks(BinaryReader reader);
 
-        public abstract Action<Block> WriteBlock(BinaryWriter writer);
+        protected abstract Action<Block> WriteBlock(BinaryWriter writer);
 
-        public abstract Func<Block, Block> TransformBlock();
+        protected abstract Func<Block, Block> TransformBlock();
     }
 }

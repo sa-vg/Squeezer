@@ -7,7 +7,7 @@ namespace Pipelines
 {
     class DecompressionPipeline : Pipeline
     {
-        public override IEnumerable<Block> ReadBlocks(BinaryReader reader)
+        protected override IEnumerable<Block> ReadBlocks(BinaryReader reader)
         {
             while (reader.BaseStream.Position != reader.BaseStream.Length)
             {
@@ -18,7 +18,7 @@ namespace Pipelines
             }
         }
 
-        public override Action<Block> WriteBlock(BinaryWriter writer)
+        protected override Action<Block> WriteBlock(BinaryWriter writer)
         {
             return block =>
             {
@@ -27,7 +27,7 @@ namespace Pipelines
             };
         }
 
-        public override Func<Block, Block> TransformBlock()
+        protected override Func<Block, Block> TransformBlock()
         {
             return block =>
             {
