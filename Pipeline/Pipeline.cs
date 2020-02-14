@@ -1,30 +1,39 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
-using System.Linq;
+using System.Threading;
+using System.Threading.Channels;
 
 namespace Pipelines
 {
-    public abstract class Pipeline
+    public class Pipeline
     {
-        public static Pipeline Create(CompressionMode mode)
+        public Config Config { get; }
+        private readonly WorkPlan _algs;
+        private readonly CancellationTokenSource _cancellationTokenSource;
+
+        public Pipeline(Config config, WorkPlan workAlgs)
         {
-            if(mode == CompressionMode.Compress) return new CompressionPipeline();
-            return new DecompressionPipeline();
+            _algs = workAlgs ?? throw new ArgumentNullException(nameof(workAlgs));
+            Config = config ?? throw new ArgumentNullException(nameof(config));
+            _cancellationTokenSource = new CancellationTokenSource();
         }
 
         public void Process(string inputFile, string outputFile)
         {
+            if (string.IsNullOrWhiteSpace(inputFile)) throw new ArgumentException("Value cannot be null or whitespace.", nameof(inputFile));
+            if (string.IsNullOrWhiteSpace(outputFile)) throw new ArgumentException("Value cannot be null or whitespace.", nameof(outputFile));
+            
             try
             {
-                using (var inputFs = new FileStream(inputFile, FileMode.Open))
-                using (var outputFs = new FileStream(outputFile, FileMode.Create))
-                using (var reader = new BinaryReader(inputFs))
-                using (var writer = new BinaryWriter(outputFs))
-                {
-                    RunPipeline(reader, writer);
-                }
+                using var inputFs = new FileStream(inputFile, FileMode.Open);
+                using var outputFs = new FileStream(outputFile, FileMode.Create);
+                using var reader = new BinaryReader(inputFs);
+                using var writer = new BinaryWriter(outputFs);
+                
+                SetPipeline(blockSource: _algs.ReadBlocks(reader), transformAlg: _algs.TransformBlock(), writeAlg: _algs.WriteBlock(writer));
             }
             catch (InvalidDataException de)
             {
@@ -40,28 +49,79 @@ namespace Pipelines
             }
         }
 
-        private void RunPipeline(BinaryReader reader, BinaryWriter writer)
+        private void SetPipeline(IEnumerable<Block> blockSource, Func<Block, Block> transformAlg, Action<Block> writeAlg) 
         {
-            var transformBlock = TransformBlock();
-            var writeBlock = WriteBlock(writer);
+            var readBuffer = new BlockingCollection<Block>(Config.BuffersCapacity);
+            var writeBuffer = new BlockingCollection<Block>(Config.BuffersCapacity);
+            var cancellationToken = _cancellationTokenSource.Token;
 
-            var blocks = ReadBlocks(reader).
-                    AsParallel().
-                    AsOrdered().
-                    WithExecutionMode(ParallelExecutionMode.ForceParallelism).
-                    WithMergeOptions(ParallelMergeOptions.NotBuffered).
-                Select(transformBlock);
+            var readWork = new Work(
+                work: () => ReadSourceItems(
+                    source: blockSource,
+                    target: readBuffer,
+                    cancellationToken),
+                workersCount: 1,
+                onComplete: readBuffer.CompleteAdding,
+                onError: StopPipeline);
 
-            foreach (var block in blocks)
+            var transformWork = new Work(
+                work: () => TransformItems(
+                    source: readBuffer,
+                    target: writeBuffer,
+                    action: transformAlg,
+                    cancellationToken),
+                workersCount: Config.DegreeOfParallelism,
+                onComplete: writeBuffer.CompleteAdding,
+                onError: StopPipeline);
+
+            var writeWork = new Work(
+                work: () => WriteItems(
+                    source: writeBuffer.GetConsumingEnumerable(),
+                    action: writeAlg,
+                    cancellationToken),
+                workersCount: 1,
+                onError: StopPipeline);
+
+            readWork.Start();
+            transformWork.Start();
+            writeWork.Start();
+
+            writeWork.Join();
+        }
+
+        private void StopPipeline(Exception ex)
+        {
+            Console.WriteLine(ex);
+            _cancellationTokenSource.Cancel();
+        }
+
+        public void ReadSourceItems<T>(IEnumerable<T> source, BlockingCollection<T> target,
+            CancellationToken cancellationToken)
+        {
+            foreach (var item in source)
             {
-                writeBlock(block);
+                if (cancellationToken.IsCancellationRequested) break;
+                target.Add(item, cancellationToken);
             }
         }
 
-        protected abstract IEnumerable<Block> ReadBlocks(BinaryReader reader);
+        public void TransformItems<T>(BlockingCollection<T> source, BlockingCollection<T> target, Func<T, T> action,
+            CancellationToken cancellationToken)
+        {
+            foreach (var item in source.GetConsumingEnumerable())
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+                target.Add(action(item), cancellationToken);
+            }
+        }
 
-        protected abstract Action<Block> WriteBlock(BinaryWriter writer);
-
-        protected abstract Func<Block, Block> TransformBlock();
+        public void WriteItems<T>(IEnumerable<T> source, Action<T> action, CancellationToken cancellationToken)
+        {
+            foreach (var item in source)
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+                action(item);
+            }
+        }
     }
 }

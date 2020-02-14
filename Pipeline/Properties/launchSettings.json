@@ -1,8 +1,12 @@
 {
   "profiles": {
-    "Pipeline": {
+    "Compress": {
       "commandName": "Project",
-      "commandLineArgs": "\"C:\\Temp\\New folder\\somefile.iso\" \"C:\\Temp\\New folder\\somefile.zzz\" compress"
+      "commandLineArgs": "\"C:\\Temp\\436.30-desktop-win10-64bit-international-whql.exe\" \"C:\\Temp\\result.compressed\" compress"
+    },
+    "Decompress": {
+      "commandName": "Project",
+      "commandLineArgs": "\"C:\\Temp\\result.compressed\" \"C:\\Temp\\result-decompressed.exe\"  decompress"
     }
   }
 }

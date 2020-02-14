@@ -6,30 +6,30 @@ using System.Threading;
 
 namespace Pipelines
 {
-    class CompressionPipeline : Pipeline
+    internal class CompressionPlan : WorkPlan
     {
-        protected override IEnumerable<Block> ReadBlocks(BinaryReader reader)
+        public CompressionPlan(int blockSize): base (blockSize) { }
+
+        public override IEnumerable<Block> ReadBlocks(BinaryReader reader)
         {
             int index = 0;
             while (true)
             {
-                var bytes = reader.ReadBytes(Config.BlockSize);
+                var bytes = reader.ReadBytes(BlockSize);
                 if (bytes.Length > 0) yield return new Block(index++, bytes);
                 else break;
             }
         }
 
-        protected override Action<Block> WriteBlock(BinaryWriter writer)
-        {
-            return block =>
+        public override Action<Block> WriteBlock(BinaryWriter writer) =>
+            block =>
             {
                 writer.Write(block.Index);
                 writer.Write(block.Bytes.Length);
                 writer.Write(block.Bytes);
             };
-        }
 
-        protected override Func<Block, Block> TransformBlock()
+        public override Func<Block, Block> TransformBlock()
         {
             var localBuffer = new ThreadLocal<MemoryStream>(() => new MemoryStream());
 

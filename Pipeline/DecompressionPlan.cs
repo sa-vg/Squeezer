@@ -5,9 +5,11 @@ using System.IO.Compression;
 
 namespace Pipelines
 {
-    class DecompressionPipeline : Pipeline
+    internal class DecompressionPlan : WorkPlan
     {
-        protected override IEnumerable<Block> ReadBlocks(BinaryReader reader)
+        public DecompressionPlan(int blockSize) : base(blockSize) { }
+
+        public override IEnumerable<Block> ReadBlocks(BinaryReader reader)
         {
             while (reader.BaseStream.Position != reader.BaseStream.Length)
             {
@@ -18,27 +20,25 @@ namespace Pipelines
             }
         }
 
-        protected override Action<Block> WriteBlock(BinaryWriter writer)
-        {
-            return block =>
+        public override Action<Block> WriteBlock(BinaryWriter writer) =>
+            block =>
             {
-                writer.BaseStream.Position = (long)block.Index * Config.BlockSize;
+                writer.BaseStream.Position = (long)block.Index * BlockSize;
                 writer.Write(block.Bytes);
             };
-        }
 
-        protected override Func<Block, Block> TransformBlock()
+        public override Func<Block, Block> TransformBlock()
         {
             return block =>
             {
                 var ms = new MemoryStream(block.Bytes);
-                var result = new byte[Config.BlockSize];
+                var result = new byte[BlockSize];
 
                 int bytesRead = 0;
-                using (var gs = new GZipStream(ms, CompressionMode.Decompress)) bytesRead = gs.Read(result, 0, Config.BlockSize);
+                using (var gs = new GZipStream(ms, CompressionMode.Decompress)) bytesRead = gs.Read(result, 0, BlockSize);
 
                 //last block
-                if (bytesRead != Config.BlockSize) Array.Resize(ref result, bytesRead);
+                if (bytesRead != BlockSize) Array.Resize(ref result, bytesRead);
 
                 return new Block(block.Index, result);
             };
