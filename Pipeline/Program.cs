@@ -1,11 +1,13 @@
 ﻿using System;
+using System.IO;
 using System.IO.Compression;
+using System.Threading;
 
-namespace Pipelines
+namespace Compressor
 {
     public class Config
     {
-        public static Config Default = new Config(1024*1024, Environment.ProcessorCount, 100);
+        public static Config Default = new Config(1024 * 1024, Environment.ProcessorCount, 100);
 
         public Config(int blockSize, int degreeOfParallelism, int buffersCapacity)
         {
@@ -21,24 +23,68 @@ namespace Pipelines
 
     public class Program
     {
+
         static void Main(string[] args)
         {
             try
             {
-                var compressionMode = (CompressionMode)Enum.Parse(typeof(CompressionMode), args[2], true);
-                var config = new Config(blockSize: 1024*1024, degreeOfParallelism: Environment.ProcessorCount, buffersCapacity: 100);
+                if (args.Length != 3) throw new Exception("Wrong args count");
+                var inputFile = args[0];
+                var outputFile = args[1];
+                if (string.IsNullOrWhiteSpace(inputFile)) throw new ArgumentException(nameof(inputFile));
+                if (string.IsNullOrWhiteSpace(outputFile)) throw new ArgumentException(nameof(outputFile));
 
-                var algs = WorkPlan.Create(compressionMode, config.BlockSize);
-                var pipeline = new Pipeline(config, algs);
+                var compressionMode = Enum.TryParse(typeof(CompressionMode), args[2], true, out object result)
+                    ? (CompressionMode)result
+                    : throw new ArgumentException("mode");
 
-                string inputFile = args[0];
-                string outputFile = args[1];
-                pipeline.Process(inputFile, outputFile);
+                var config = new Config(blockSize: 1024 * 1024, degreeOfParallelism: Environment.ProcessorCount, buffersCapacity: 100);
+
+                ProcessFile(inputFile, outputFile, compressionMode, config);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Invalid arguments {ex}");
+                Console.WriteLine($"Invalid arguments: {ex}.");
+            }
+
+            Console.ReadLine();
+        }
+
+        public static void ProcessFile(string inputFile, string outputFile, CompressionMode compressionMode, Config config)
+        {
+            Console.WriteLine($"Starting {compressionMode} operation from {inputFile} to {outputFile}");
+
+            try
+            {
+                using var inputFs = new FileStream(inputFile, FileMode.Open);
+                using var outputFs = new FileStream(outputFile, FileMode.Create);
+                using var reader = new BinaryReader(inputFs);
+                using var writer = new BinaryWriter(outputFs);
+
+                var blockAlgs = BlockAlgs.Create(compressionMode, config.BlockSize);
+                var cts = new CancellationTokenSource();
+                var pipeline = new Pipeline(config, cts.Token);
+
+                pipeline.Run(blockSource: blockAlgs.ReadBlocks(reader),
+                    transformAlg: blockAlgs.TransformBlock(),
+                    writeAlg: blockAlgs.WriteBlock(writer));
+
+                Console.WriteLine("Completed!");
+            }
+            catch (InvalidDataException de)
+            {
+                Console.WriteLine("File corrupted or not supported format");
+            }
+            catch (IOException io)
+            {
+                Console.WriteLine($"Wrong file name \n {io.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Unknown error \n {ex}");
             }
         }
     }
+
+
 }

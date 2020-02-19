@@ -1,4 +1,4 @@
-﻿namespace Pipelines
+﻿namespace Compressor
 {
     public struct Block
     {

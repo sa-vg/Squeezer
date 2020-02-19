@@ -1,14 +1,14 @@
 ﻿using System;
 using System.Threading;
 
-namespace Pipelines
+namespace Compressor
 {
-    public class Work
+    public class WorkGroup
     {
         private int _workersCount;
         private readonly Thread[] _workers;
 
-        public Work(Action work, int workersCount, Action onComplete = default, Action<Exception> onError = default)
+        public WorkGroup(Action work, int workersCount, Action onComplete = default, Action<Exception> onError = default)
         {
             _workers = new Thread[workersCount];
             _workersCount = workersCount;

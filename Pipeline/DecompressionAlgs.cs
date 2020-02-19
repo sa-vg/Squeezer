@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 
-namespace Pipelines
+namespace Compressor
 {
-    internal class DecompressionPlan : WorkPlan
+    internal class DecompressionAlgs : BlockAlgs
     {
-        public DecompressionPlan(int blockSize) : base(blockSize) { }
+        public DecompressionAlgs(int blockSize) : base(blockSize) { }
 
         public override IEnumerable<Block> ReadBlocks(BinaryReader reader)
         {
@@ -34,7 +34,7 @@ namespace Pipelines
                 var ms = new MemoryStream(block.Bytes);
                 var result = new byte[BlockSize];
 
-                int bytesRead = 0;
+                int bytesRead;
                 using (var gs = new GZipStream(ms, CompressionMode.Decompress)) bytesRead = gs.Read(result, 0, BlockSize);
 
                 //last block

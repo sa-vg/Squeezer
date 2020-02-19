@@ -4,7 +4,8 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Security.Cryptography;
-using Pipelines;
+using System.Threading;
+using Compressor;
 using Xunit;
 
 namespace PipelineTests
@@ -14,7 +15,7 @@ namespace PipelineTests
         [Theory]
         [InlineData(@"C:\Temp\436.30-desktop-win10-64bit-international-whql.exe")]
         [InlineData(@"I:\Downloads\boost_1_71_0-msvc-12.0-64.exe")]
-        //[InlineData(@"C:\Temp\New folder\VirtualBox-6.0.14-133895-Win.txt")]
+        [InlineData(@"I:\VM\Debian\Worker1\System-flat.vmdk")]
         public void TestPipeline(string inputFile)
         {
             var fileName = Path.GetFileNameWithoutExtension(inputFile);
@@ -22,13 +23,10 @@ namespace PipelineTests
             var restoredFile = inputFile.Replace(fileName, fileName + "_restored");
 
             var config = Config.Default;
-            var algs1 = WorkPlan.Create(CompressionMode.Compress, config.BlockSize);
-            var pipeline1 = new Pipeline(config, algs1);
-            pipeline1.Process(inputFile, compressedFile);
 
-            var algs2 = WorkPlan.Create(CompressionMode.Decompress, config.BlockSize);
-            var pipeline2 = new Pipeline(config, algs2);
-            pipeline2.Process(compressedFile, restoredFile);
+            Program.ProcessFile(inputFile, compressedFile, CompressionMode.Compress, config);
+
+            Program.ProcessFile(compressedFile, restoredFile, CompressionMode.Decompress, config);
 
             var filesEqual = CheckFilesEqual(inputFile, restoredFile);
 

@@ -2,11 +2,15 @@
   "profiles": {
     "Compress": {
       "commandName": "Project",
-      "commandLineArgs": "\"C:\\Temp\\436.30-desktop-win10-64bit-international-whql.exe\" \"C:\\Temp\\result.compressed\" compress"
+      "commandLineArgs": "\"C:\\Temp\\Temp.zip\" \"C:\\Temp\\result.compressed\" compress  "
     },
     "Decompress": {
       "commandName": "Project",
       "commandLineArgs": "\"C:\\Temp\\result.compressed\" \"C:\\Temp\\result-decompressed.exe\"  decompress"
+    },
+    "CompressBig": {
+      "commandName": "Project",
+      "commandLineArgs": "\"I:\\VM\\Debian\\Worker1\\System-flat.vmdk\" \"I:\\VM\\Debian\\Worker1\\System-flat.ccc\" compress"
     }
   }
 }

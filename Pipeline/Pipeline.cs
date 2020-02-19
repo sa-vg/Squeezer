@@ -1,84 +1,54 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
-using System.IO.Compression;
 using System.Threading;
-using System.Threading.Channels;
 
-namespace Pipelines
+namespace Compressor
 {
     public class Pipeline
     {
-        public Config Config { get; }
-        private readonly WorkPlan _algs;
-        private readonly CancellationTokenSource _cancellationTokenSource;
+        private readonly Config _config;
+        private readonly BlockingCollection<Block> _readBuffer;
+        private readonly BlockingCollection<Block> _writeBuffer;
+        private readonly CancellationTokenSource _cancellationSource;
+        private readonly CancellationToken _cancellationToken;
+        private Exception _exception;
 
-        public Pipeline(Config config, WorkPlan workAlgs)
+        public Pipeline(Config config, CancellationToken cancellationToken)
         {
-            _algs = workAlgs ?? throw new ArgumentNullException(nameof(workAlgs));
-            Config = config ?? throw new ArgumentNullException(nameof(config));
-            _cancellationTokenSource = new CancellationTokenSource();
+            _config = config ?? throw new ArgumentNullException(nameof(config));
+            _cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _cancellationToken = _cancellationSource.Token;
+            _readBuffer = new BlockingCollection<Block>(_config.BuffersCapacity);
+            _writeBuffer = new BlockingCollection<Block>(_config.BuffersCapacity);
         }
 
-        public void Process(string inputFile, string outputFile)
+        public void Run(IEnumerable<Block> blockSource, Func<Block, Block> transformAlg, Action<Block> writeAlg) 
         {
-            if (string.IsNullOrWhiteSpace(inputFile)) throw new ArgumentException("Value cannot be null or whitespace.", nameof(inputFile));
-            if (string.IsNullOrWhiteSpace(outputFile)) throw new ArgumentException("Value cannot be null or whitespace.", nameof(outputFile));
-            
-            try
-            {
-                using var inputFs = new FileStream(inputFile, FileMode.Open);
-                using var outputFs = new FileStream(outputFile, FileMode.Create);
-                using var reader = new BinaryReader(inputFs);
-                using var writer = new BinaryWriter(outputFs);
-                
-                SetPipeline(blockSource: _algs.ReadBlocks(reader), transformAlg: _algs.TransformBlock(), writeAlg: _algs.WriteBlock(writer));
-            }
-            catch (InvalidDataException de)
-            {
-                Console.WriteLine("File corrupted or not supported format");
-            }
-            catch (IOException io)
-            {
-                Console.WriteLine($"Wrong file name \n {io}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Unknown error \n {ex}");
-            }
-        }
-
-        private void SetPipeline(IEnumerable<Block> blockSource, Func<Block, Block> transformAlg, Action<Block> writeAlg) 
-        {
-            var readBuffer = new BlockingCollection<Block>(Config.BuffersCapacity);
-            var writeBuffer = new BlockingCollection<Block>(Config.BuffersCapacity);
-            var cancellationToken = _cancellationTokenSource.Token;
-
-            var readWork = new Work(
+            var readWork = new WorkGroup(
                 work: () => ReadSourceItems(
                     source: blockSource,
-                    target: readBuffer,
-                    cancellationToken),
+                    target: _readBuffer,
+                    _cancellationToken),
                 workersCount: 1,
-                onComplete: readBuffer.CompleteAdding,
+                onComplete: _readBuffer.CompleteAdding,
                 onError: StopPipeline);
 
-            var transformWork = new Work(
+            var transformWork = new WorkGroup(
                 work: () => TransformItems(
-                    source: readBuffer,
-                    target: writeBuffer,
+                    source: _readBuffer,
+                    target: _writeBuffer,
                     action: transformAlg,
-                    cancellationToken),
-                workersCount: Config.DegreeOfParallelism,
-                onComplete: writeBuffer.CompleteAdding,
+                    _cancellationToken),
+                workersCount: _config.DegreeOfParallelism,
+                onComplete: _writeBuffer.CompleteAdding,
                 onError: StopPipeline);
 
-            var writeWork = new Work(
+            var writeWork = new WorkGroup(
                 work: () => WriteItems(
-                    source: writeBuffer.GetConsumingEnumerable(),
+                    source: _writeBuffer,
                     action: writeAlg,
-                    cancellationToken),
+                    _cancellationToken),
                 workersCount: 1,
                 onError: StopPipeline);
 
@@ -87,15 +57,17 @@ namespace Pipelines
             writeWork.Start();
 
             writeWork.Join();
+
+            if (_exception != null) throw _exception;
         }
 
         private void StopPipeline(Exception ex)
         {
-            Console.WriteLine(ex);
-            _cancellationTokenSource.Cancel();
+            _exception = ex;
+            _cancellationSource.Cancel();
         }
 
-        public void ReadSourceItems<T>(IEnumerable<T> source, BlockingCollection<T> target,
+        private void ReadSourceItems<T>(IEnumerable<T> source, BlockingCollection<T> target,
             CancellationToken cancellationToken)
         {
             foreach (var item in source)
@@ -105,7 +77,7 @@ namespace Pipelines
             }
         }
 
-        public void TransformItems<T>(BlockingCollection<T> source, BlockingCollection<T> target, Func<T, T> action,
+        private void TransformItems<T>(BlockingCollection<T> source, BlockingCollection<T> target, Func<T, T> action,
             CancellationToken cancellationToken)
         {
             foreach (var item in source.GetConsumingEnumerable())
@@ -115,9 +87,9 @@ namespace Pipelines
             }
         }
 
-        public void WriteItems<T>(IEnumerable<T> source, Action<T> action, CancellationToken cancellationToken)
+        private void WriteItems<T>(BlockingCollection<T> source, Action<T> action, CancellationToken cancellationToken)
         {
-            foreach (var item in source)
+            foreach (var item in source.GetConsumingEnumerable())
             {
                 if (cancellationToken.IsCancellationRequested) break;
                 action(item);

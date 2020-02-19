@@ -4,11 +4,11 @@ using System.IO;
 using System.IO.Compression;
 using System.Threading;
 
-namespace Pipelines
+namespace Compressor
 {
-    internal class CompressionPlan : WorkPlan
+    internal class CompressionAlgs : BlockAlgs
     {
-        public CompressionPlan(int blockSize): base (blockSize) { }
+        public CompressionAlgs(int blockSize): base (blockSize) { }
 
         public override IEnumerable<Block> ReadBlocks(BinaryReader reader)
         {

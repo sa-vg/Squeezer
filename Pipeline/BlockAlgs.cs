@@ -3,21 +3,21 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 
-namespace Pipelines
+namespace Compressor
 {
-    public abstract class WorkPlan
+    public abstract class BlockAlgs
     {
         public int BlockSize { get; }
 
-        protected WorkPlan(int blockSize)
+        protected BlockAlgs(int blockSize)
         {
             BlockSize = blockSize;
         }
 
-        public static WorkPlan Create(CompressionMode mode, int blockSize)
+        public static BlockAlgs Create(CompressionMode mode, int blockSize)
         {
-            if (mode == CompressionMode.Compress) return new CompressionPlan(blockSize);
-            return new DecompressionPlan(blockSize);
+            if (mode == CompressionMode.Compress) return new CompressionAlgs(blockSize);
+            return new DecompressionAlgs(blockSize);
         }
 
         public abstract IEnumerable<Block> ReadBlocks(BinaryReader reader);
