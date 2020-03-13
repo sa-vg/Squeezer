@@ -23,32 +23,22 @@ namespace Compressor
             _writeBuffer = new BlockingCollection<Block>(_config.BuffersCapacity);
         }
 
-        public void Run(IEnumerable<Block> blockSource, Func<Block, Block> transformAlg, Action<Block> writeAlg) 
+        public void Run(IEnumerable<Block> blockSource, Func<Block, Block> transformBlockAlg, Action<Block> writeBlockAlg) 
         {
             var readWork = new WorkGroup(
-                work: () => ReadSourceItems(
-                    source: blockSource,
-                    target: _readBuffer,
-                    _cancellationToken),
+                work: () => _readBuffer.Fill(blockSource, _cancellationToken),
                 workersCount: 1,
                 onComplete: _readBuffer.CompleteAdding,
                 onError: StopPipeline);
 
             var transformWork = new WorkGroup(
-                work: () => TransformItems(
-                    source: _readBuffer,
-                    target: _writeBuffer,
-                    action: transformAlg,
-                    _cancellationToken),
+                work: () => _readBuffer.TransformItems(action: transformBlockAlg, target: _writeBuffer, _cancellationToken),
                 workersCount: _config.DegreeOfParallelism,
                 onComplete: _writeBuffer.CompleteAdding,
                 onError: StopPipeline);
 
             var writeWork = new WorkGroup(
-                work: () => WriteItems(
-                    source: _writeBuffer,
-                    action: writeAlg,
-                    _cancellationToken),
+                work: () => _writeBuffer.Consume(action: writeBlockAlg, _cancellationToken),
                 workersCount: 1,
                 onError: StopPipeline);
 
@@ -65,35 +55,6 @@ namespace Compressor
         {
             _exception = ex;
             _cancellationSource.Cancel();
-        }
-
-        private void ReadSourceItems<T>(IEnumerable<T> source, BlockingCollection<T> target,
-            CancellationToken cancellationToken)
-        {
-            foreach (var item in source)
-            {
-                if (cancellationToken.IsCancellationRequested) break;
-                target.Add(item, cancellationToken);
-            }
-        }
-
-        private void TransformItems<T>(BlockingCollection<T> source, BlockingCollection<T> target, Func<T, T> action,
-            CancellationToken cancellationToken)
-        {
-            foreach (var item in source.GetConsumingEnumerable())
-            {
-                if (cancellationToken.IsCancellationRequested) break;
-                target.Add(action(item), cancellationToken);
-            }
-        }
-
-        private void WriteItems<T>(BlockingCollection<T> source, Action<T> action, CancellationToken cancellationToken)
-        {
-            foreach (var item in source.GetConsumingEnumerable())
-            {
-                if (cancellationToken.IsCancellationRequested) break;
-                action(item);
-            }
         }
     }
 }

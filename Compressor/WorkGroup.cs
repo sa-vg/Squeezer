@@ -10,8 +10,8 @@ namespace Compressor
 
         public WorkGroup(Action work, int workersCount, Action onComplete = default, Action<Exception> onError = default)
         {
-            _workers = new Thread[workersCount];
             _workersCount = workersCount;
+            _workers = new Thread[workersCount];
 
             for (int i = 0; i < workersCount; i++)
             {

@@ -2,9 +2,6 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Threading;
 using Compressor;
 using Xunit;
 
@@ -13,9 +10,8 @@ namespace PipelineTests
     public class Tests
     {
         [Theory]
-        [InlineData(@"C:\Temp\436.30-desktop-win10-64bit-international-whql.exe")]
-        [InlineData(@"I:\Downloads\boost_1_71_0-msvc-12.0-64.exe")]
-        [InlineData(@"I:\VM\Debian\Worker1\System-flat.vmdk")]
+        [InlineData(@"C:\Temp\V.iso")]
+        [InlineData(@"C:\Temp\BIAS_FX_2_Windows64bit_v2_1_7_4820.msi")]
         public void TestPipeline(string inputFile)
         {
             var fileName = Path.GetFileNameWithoutExtension(inputFile);
@@ -49,12 +45,11 @@ namespace PipelineTests
                     return false;
                 }
 
-                if (byte1 == -1)
-                {
-                    Debug.WriteLine($"Files are equal, total length {fs1.Length} {fs2.Length}");
-                    return true;
-                }
+                if (byte1 == -1) break;
             }
+
+            Debug.WriteLine($"Files are equal, total length {fs1.Length} {fs2.Length}");
+            return true;
         }
     }
 }

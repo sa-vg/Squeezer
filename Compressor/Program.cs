@@ -58,16 +58,15 @@ namespace Compressor
             {
                 using var inputFs = new FileStream(inputFile, FileMode.Open);
                 using var outputFs = new FileStream(outputFile, FileMode.Create);
-                using var reader = new BinaryReader(inputFs);
-                using var writer = new BinaryWriter(outputFs);
 
-                var blockAlgs = BlockAlgs.Create(compressionMode, config.BlockSize);
+                var algs = BlockAlgs.Create(compressionMode, config.BlockSize, inputFs, outputFs);
+
                 var cts = new CancellationTokenSource();
                 var pipeline = new Pipeline(config, cts.Token);
-
-                pipeline.Run(blockSource: blockAlgs.ReadBlocks(reader),
-                    transformAlg: blockAlgs.TransformBlock(),
-                    writeAlg: blockAlgs.WriteBlock(writer));
+                
+                pipeline.Run(blockSource: algs.Reader.ReadBlocks(), 
+                    transformBlockAlg: algs.Transformer.TransformBlock, 
+                    writeBlockAlg: algs.Writer.WriteBlock);
 
                 Console.WriteLine("Completed!");
             }
